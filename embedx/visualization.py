@@ -94,6 +94,13 @@ def visualize_tsne_3d(embeddings, perplexity, labels=None, save_path=None):
     else:
         plt.show()
 
+def visualize_clusters(embeddings, n_samples, labels=None, method="umap", dim=2, save_path=None):
+    method = method.lower()
+    if (method == "umap"):
+        visualize_umap(embeddings, n_samples, dim, labels, save_path)
+    elif (method == "tsne"):
+        visualize_tsne(embeddings, n_samples, dim, labels, save_path)
+
 def visualize_neighbors(embeddings, threshold=0.95, n_neighbors=10, save_path=None):
     nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
     nn.fit(embeddings)

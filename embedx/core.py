@@ -89,6 +89,12 @@ class Embedx:
         from .visualization import visualize_norms
         visualize_norms(self.embeddings, save_path=save_path)
 
+    def cluster_visualize(self, cluster_method="kmeans", viz_method="umap", dim=2, save_path=None, **kwargs):
+        from .cluster import cluster_embeddings
+        from .visualization import visualize_clusters
+        labels = cluster_embeddings(self.embeddings, method=cluster_method, verbose=self.verbose, **kwargs)
+        visualize_clusters(self.embeddings, self.n_samples, labels, method=viz_method, dim=dim, save_path=save_path)
+
     def center(self):
         mean = np.mean(self.embeddings, axis=0, keepdims = True)
         self.embeddings -= mean
@@ -151,3 +157,7 @@ class Embedx:
 
         if self.verbose:
             print(f"Saved embeddings to {path} as .{format}")
+
+    def cluster_embeddings(self, method="kmeans", **kwargs):
+        from .cluster import cluster_embeddings
+        return cluster_embeddings(self.embeddings, method=method, verbose = self.verbose, **kwargs)
