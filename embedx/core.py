@@ -192,3 +192,7 @@ class Embedx:
     def decay_over_time(self, window_size=10, plot=True):
         from .advanced import decay_over_time
         return decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True)
+    
+    def adaptive_optimize(self, user_goal, n_trials=10, verbose=True):
+        from .assistant import optimize_embeddings
+        return optimize_embeddings(self, user_goal=user_goal, n_trials=n_trials, verbose=verbose)
