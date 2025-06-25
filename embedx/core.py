@@ -1,5 +1,10 @@
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
+try:
+    import faiss
+    FAISS_AVAILABLE = True
+except ImportError:
+    from sklearn.neighbors import NearestNeighbors
+    FAISS_AVAILABLE = False
 from sklearn.ensemble import IsolationForest
 from sklearn.decomposition import PCA
 import umap
@@ -26,19 +31,32 @@ class Embedx:
         }
     
     def find_duplicates(self, threshold=0.99, neighbors=10):
-        nn = NearestNeighbors(n_neighbors=neighbors, metric="cosine")
-        nn.fit(self.embeddings)
-        distances, indices = nn.kneighbors(self.embeddings)
+        if FAISS_AVAILABLE:
+            faiss.normalize_L2(self.embeddings.astype(np.float32))
+            index = faiss.IndexFlatIP(self.n_dim)
+            index.add(self.embeddings)
+            distances, indices = index.search(self.embeddings, neighbors + 1)
 
-        duplicates = []
-        for i, (dist_row, index_row) in enumerate(zip(distances, indices)):
-            for dist, index in zip(dist_row[1:], index_row[1:]):
-                if (1 - dist) >= threshold:
-                    if i < index:
-                        duplicates.append((i, index, 1 - dist))
-       
-        if self.verbose:
-            print(f"Found {len(duplicates)} near-duplicates")
+            duplicates = []
+            for i, (dist_row, index_row) in enumerate(zip(distances, indices)):
+                for dist, index in zip(dist_row[1:], index_row[1:]):
+                    if dist >= threshold:
+                        if i < index:
+                            duplicates.append((i, index, dist))
+        else:                    
+            nn = NearestNeighbors(n_neighbors=neighbors, metric="cosine")
+            nn.fit(self.embeddings)
+            distances, indices = nn.kneighbors(self.embeddings)
+
+            duplicates = []
+            for i, (dist_row, index_row) in enumerate(zip(distances, indices)):
+                for dist, index in zip(dist_row[1:], index_row[1:]):
+                    if (1 - dist) >= threshold:
+                        if i < index:
+                            duplicates.append((i, index, 1 - dist))
+        
+            if self.verbose:
+                print(f"Found {len(duplicates)} near-duplicates")
         return duplicates
     
     def remove_duplicates(self, threshold=0.99, neighbors=10):
@@ -169,29 +187,29 @@ class Embedx:
         from .cluster import cluster_embeddings
         return cluster_embeddings(self.embeddings, method=method, verbose = self.verbose, **kwargs)
     
-    def intracluster_variance(self, plot=True):
+    def intracluster_variance(self, plot=True, save_path=None):
         from .advanced import intracluster_variance
-        return intracluster_variance(self.embeddings, self.labels, plot=plot)
+        return intracluster_variance(self.embeddings, self.labels, plot=plot, save_path=save_path)
     
-    def intercluster_distance(self, plot=True):
+    def intercluster_distance(self, plot=True, save_path=None):
         from .advanced import intercluster_distance
-        return intercluster_distance(self.embeddings, self.labels, plot=plot)
+        return intercluster_distance(self.embeddings, self.labels, plot=plot, save_path=save_path)
     
-    def compare_models(self, embeddings_2, plot=True):
+    def compare_models(self, embeddings_2, plot=True, save_path = None):
         from .advanced import compare_models
-        return compare_models(self.embeddings, embeddings_2, plot=plot)
+        return compare_models(self.embeddings, embeddings_2, plot=plot, save_path=save_path)
     
-    def semantic_coverage(self, top_n=5, plot=True):
+    def semantic_coverage(self, top_n=5, plot=True, save_path=None):
         from .advanced import semantic_coverage
-        return semantic_coverage(self.embeddings, self.labels, top_n=top_n, plot=plot)       
+        return semantic_coverage(self.embeddings, self.labels, top_n=top_n, plot=plot, save_path=save_path)       
     
-    def density(self, threshold, n_neighbors,  plot=True):
+    def density(self, threshold, n_neighbors,  plot=True, save_path=None):
         from .advanced import density
-        return density(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, plot=plot)
+        return density(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, plot=plot, save_path=save_path)
     
-    def decay_over_time(self, window_size=10, plot=True):
+    def decay_over_time(self, window_size=10, plot=True, save_path=None):
         from .advanced import decay_over_time
-        return decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True)
+        return decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True, save_path=save_path)
     
     def adaptive_optimize(self, user_goal, n_trials=10, verbose=True):
         from .assistant import optimize_embeddings

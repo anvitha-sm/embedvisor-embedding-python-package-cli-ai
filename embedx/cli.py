@@ -25,7 +25,7 @@ def stats():
 def basic(input):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
-    embedx.basic_stats(verbose=True)
+    embedx.basic_stats()
 
 @cli.group()
 def clean():
@@ -36,7 +36,7 @@ def clean():
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--threshold", "-t", default=0.99, type=float, help="Threshold for duplicate removal.")
 @click.option("--output", "-o", required=True, type=str, help="Path to save the cleaned embeddings (.npy).")
-def remove_duplicates(input, threshold):
+def remove_duplicates(input, threshold, output):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
     embedx.remove_duplicates(threshold=threshold)
@@ -46,7 +46,7 @@ def remove_duplicates(input, threshold):
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--contamination", "-c", default=0.01, type=float, help="Contamination level for outlier removal.")
 @click.option("--output", "-o", required=True, type=str, help="Path to save the cleaned embeddings (.npy).")
-def remove_outliers(input, contamination):
+def remove_outliers(input, contamination, output):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
     embedx.remove_outliers(contamination=contamination)
@@ -55,7 +55,7 @@ def remove_outliers(input, contamination):
 @clean.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--output", "-o", required=True, type=str, help="Path to save the cleaned embeddings (.npy).")
-def center(input):
+def center(input, output):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
     embedx.center()
@@ -65,7 +65,7 @@ def center(input):
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--method", "-m", default="l2", type=click.Choice(["l1", "l2"]), help="Normalization method.")
 @click.option("--output", "-o", required=True, type=str, help="Path to save the cleaned embeddings (.npy).")
-def normalize(input, method):
+def normalize(input, method, output):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
     embedx.normalize(method=method)
@@ -76,7 +76,7 @@ def normalize(input, method):
 @click.option("--n_components", "-n", default=50, type=int, help="Number of components for whitening.")
 @click.option("--whiten", "-w", is_flag=True, help="Whether to apply whitening.")
 @click.option("--output", "-o", required=True, type=str, help="Path to save the cleaned embeddings (.npy).")
-def whiten(input, n_components, whiten):
+def whiten(input, n_components, whiten, output):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
     embedx.whiten(n_components=n_components, whiten=whiten, transform=True, plot_variance=True)
@@ -86,7 +86,7 @@ def whiten(input, n_components, whiten):
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--threshold", "-t", default=0.001, type=float, help="Threshold for low variance removal.")
 @click.option("--output", "-o", required=True, type=str, help="Path to save the cleaned embeddings (.npy).")
-def remove_low_variance(input, threshold):
+def remove_low_variance(input, threshold, output):
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
     embedx.remove_low_variance(threshold=threshold)
@@ -101,7 +101,7 @@ def visualize():
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--dim", "-d", default=2, type=int, help="Dimensionality for visualization (2 or 3).")
 @click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
-def umap(input, dim, save_path):
+def umap(input, dim, save_path=None):
     from embedx.visualization import visualize_umap
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
@@ -111,7 +111,7 @@ def umap(input, dim, save_path):
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--dim", "-d", default=2, type=int, help="Dimensionality for visualization (2 or 3).")
 @click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
-def tsne(input, dim, save_path):
+def tsne(input, dim, save_path=None):
     from embedx.visualization import visualize_tsne
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
@@ -122,7 +122,7 @@ def tsne(input, dim, save_path):
 @click.option("--threshold", "-t", default=0.95, type=float, help="Threshold for neighbor visualization.")
 @click.option("--n_neighbors", "-n", default=10, type=int, help="Number of neighbors to visualize.")
 @click.option("--save_path", "-s", type=str, help="Path to save the neighbor visualization image.")
-def neighbors(input, threshold, n_neighbors):
+def neighbors(input, threshold, n_neighbors, save_path=None):
     from embedx.visualization import visualize_neighbors
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
@@ -131,7 +131,7 @@ def neighbors(input, threshold, n_neighbors):
 @visualize.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--save_path", "-s", type=str, help="Path to save the norm histogram image.")
-def norms(input, save_path):
+def norms(input, save_path=None):
     from embedx.visualization import visualize_norms
     embeddings = load_embeddings(input)
     embedx = Embedx(embeddings, verbose=True)
@@ -143,7 +143,7 @@ def norms(input, save_path):
 @click.option("--viz_method", "-v", default="umap", type=click.Choice(["umap", "tsne"]), help="Visualization method.")
 @click.option("--dim", "-d", default=2, type=int, help="Dimensionality for visualization (2 or 3).")
 @click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
-def clusters(input, cluster_method, viz_method, dim, save_path):
+def clusters(input, cluster_method, viz_method, dim, save_path=None):
     from embedx.cluster import cluster_embeddings
     from embedx.visualization import visualize_clusters
     embeddings = load_embeddings(input)
@@ -160,7 +160,6 @@ def cluster():
 @cluster.command()
 @click.option('--input', required=True)
 @click.option('--method', default='kmeans')
-@click.option('--output', required=False)
 @click.option('--n_clusters', type=int, default=10)
 @click.option('--eps', type=float, default=0.5)
 @click.option('--min_samples', type=int, default=5)
@@ -184,6 +183,7 @@ def embeddings(input, method, output, n_clusters, eps, min_samples, min_cluster_
     elif method == "gmm":
         kwargs["n_components"] = n_components
     labels = embedx.cluster_embeddings(method=method, **kwargs)
+    np.savetxt(output, labels, delimiter=",", fmt="%d")
 
 @cli.group()
 def advanced():
@@ -193,65 +193,75 @@ def advanced():
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--second", "-s", required=True, type=str, help="Path to second embeddings file (.npy or .csv) for comparison.")
-def compare(input, second):
+@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+def compare(input, second, save_path=None):
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
     embeddings_2 = load_embeddings(second)
     
     embedx = Embedx(embeddings, verbose=True)
-    avg_similarity = embedx.compare_models(embeddings_2, plot=True)
+    avg_similarity = embedx.compare_models(embeddings_2, plot=True, save_path=save_path)
     print(f"Average similarity: {avg_similarity}")
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--top_n", "-n", default=5, type=int, help="Number of top items to consider for semantic coverage.")
 @click.option("--labels", "-l", required=True, type=str, help="Path to cluster labels (.csv)")
-def semantic_coverage(input, top_n, labels):
+@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+def semantic_coverage(input, top_n, labels, save_path=None):
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
     label = np.loadtxt(labels, dtype=int)
 
     embedx = Embedx(embeddings, labels=label, verbose=True)
-    embedx.semantic_coverage(top_n=top_n, plot=True)
+    embedx.semantic_coverage(top_n=top_n, plot=True, save_path=save_path)
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--labels", "-l", required=True, type=str, help="Path to cluster labels (.csv)")
-def intracluster_variance(input, labels):
+@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+def intracluster_variance(input, labels, save_path=None):
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
+    label = np.loadtxt(labels, dtype=int)
     
-    embedx = Embedx(embeddings, labels=labels, verbose=True)
-    embedx.intracluster_variance(plot=True)
+    embedx = Embedx(embeddings, labels=label, verbose=True)
+    embedx.intracluster_variance(plot=True, save_path=save_path)
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--labels", "-l", required=True, type=str, help="Path to cluster labels (.csv)")
-def intercluster_distance(input, labels):
+@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+def intercluster_distance(input, labels, save_path=None):
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
+    label = np.loadtxt(labels, dtype=int)
     
-    embedx = Embedx(embeddings, labels=labels, verbose=True)
-    embedx.intercluster_distance(plot=True)
+    embedx = Embedx(embeddings, labels=label, verbose=True)
+    embedx.intercluster_distance(plot=True, save_path=save_path)
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--threshold", "-t", default=0.95, type=float, help="Threshold for density calculation.")
 @click.option("--n_neighbors", "-n", default=10, type=int, help="Number of neighbors for density calculation.")
-def density(input, threshold, n_neighbors): 
+@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+def density(input, threshold, n_neighbors, save_path=None): 
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
     
     embedx = Embedx(embeddings, verbose=True)
-    embedx.density(threshold=threshold, n_neighbors=n_neighbors, plot=True)     
+    embedx.density(threshold=threshold, n_neighbors=n_neighbors, plot=True, save_path=save_path)     
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--window_size", "-w", default=10, type=int, help="Window size for decay calculation.")
-def decay(input, window_size):
+@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+def decay(input, window_size, save_path=None):
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
     
     embedx = Embedx(embeddings, verbose=True)
-    embedx.decay_over_time(window_size=window_size, plot=True)  
+    embedx.decay_over_time(window_size=window_size, plot=True, save_path=save_path)  
 
+if __name__ == "__main__":
+    cli()

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def compare_models(embeddings_a, embeddings_b, plot=True):
+def compare_models(embeddings_a, embeddings_b, plot=True, save_path=None):
     from sklearn.metrics.pairwise import cosine_similarity
     assert embeddings_a.shape == embeddings_b.shape, "Embeddings must have same shape"
     cosine_sim = cosine_similarity(embeddings_a, embeddings_b)
@@ -15,17 +15,21 @@ def compare_models(embeddings_a, embeddings_b, plot=True):
         plt.ylabel('Frequency')
         plt.axvline(avg_similarity, color='purple', linestyle='dashed', linewidth=1)
         plt.text(avg_similarity + 0.01, 5, f'Avg: {avg_similarity:.2f}', color='purple')
-        plt.show()
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()  
     return avg_similarity
 
-def semantic_coverage(embeddings, labels, top_n=10, plot=True):
+def semantic_coverage(embeddings, labels, top_n=10, plot=True, save_path=None):
+    from sklearn.metrics.pairwise import cosine_distances
     labels = np.array(labels)
     unique_labels = np.unique(labels)
     coverage_dict = {}
     for label in unique_labels:
         cluster_embeddings = embeddings[labels == label]
         if len(cluster_embeddings) > 0:
-            distances = np.linalg.norm(cluster_embeddings[:, None] - cluster_embeddings, axis=2)
+            distances = cosine_distances(cluster_embeddings)
             avg_distance = np.mean(distances)
             coverage_dict[label] = avg_distance
         else:
@@ -41,10 +45,13 @@ def semantic_coverage(embeddings, labels, top_n=10, plot=True):
         plt.title('Top Semantic Coverage by Cluster')
         plt.xlabel('Cluster Labels')
         plt.ylabel('Average Distance')
-        plt.show()
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()  
     return {label: coverage for label, coverage in top_coverage}
 
-def intracluster_variance(embeddings, labels, plot=True):
+def intracluster_variance(embeddings, labels, plot=True, save_path=None):
     variance_dict = {}
     unique_labels = np.unique(labels)
     for label in unique_labels:
@@ -62,10 +69,13 @@ def intracluster_variance(embeddings, labels, plot=True):
         plt.title('Intracluster Variance by Cluster')
         plt.xlabel('Cluster Labels')
         plt.ylabel('Mean Variance')
-        plt.show()
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()  
     return variance_dict
 
-def intercluster_distance(embeddings, labels, plot=True):
+def intercluster_distance(embeddings, labels, plot=True, save_path=None):
     from sklearn.metrics.pairwise import cosine_distances
     unique_labels = np.unique(labels)
     centroids = []
@@ -91,16 +101,34 @@ def intercluster_distance(embeddings, labels, plot=True):
         plt.title('Intercluster Distance Matrix')
         plt.xlabel('Cluster')
         plt.ylabel('Cluster')
-        plt.show()
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()  
     return inter_distances
 
-def density(embeddings, threshold=0.95, n_neighbors=10, plot=True):
-    from sklearn.neighbors import NearestNeighbors
-    nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
-    nn.fit(embeddings)
-    distances, _ = nn.kneighbors(embeddings)
-    densities = 1 - distances[:, 1:] 
-    density_count = np.sum(densities >= threshold, axis=1)
+def density(embeddings, threshold=0.95, n_neighbors=10, plot=True, save_path=None):
+    try:
+        import faiss
+        FAISS_AVAILABLE = True
+    except ImportError:
+        from sklearn.neighbors import NearestNeighbors
+        FAISS_AVAILABLE = False
+
+    if FAISS_AVAILABLE:
+        emb = embeddings.astype(np.float32)
+        faiss.normalize_L2(emb)
+        index = faiss.IndexFlatIP(emb.shape[1])
+        index.add(emb)
+        distances, _ = index.search(emb, n_neighbors + 1)
+        densities = np.mean(1 - distances[:, 1:], axis=1)
+        density_count = np.sum(densities >= threshold, axis=1)
+    else:
+        nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
+        nn.fit(embeddings)
+        distances, _ = nn.kneighbors(embeddings)
+        densities = 1 - distances[:, 1:] 
+        density_count = np.sum(densities >= threshold, axis=1)
 
     if plot:
         plt.figure(figsize=(10, 6))
@@ -108,13 +136,15 @@ def density(embeddings, threshold=0.95, n_neighbors=10, plot=True):
         plt.title(f'Embedding Density Histogram (Threshold: {threshold})')
         plt.xlabel('Number of Neighbors Above Threshold')
         plt.ylabel('Count')
-        plt.show()
-    return density_count
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()  
+    return densities, density_count
 
-def decay_over_time(timestamps, embeddings, window_size=10, plot=True):
+def decay_over_time(timestamps, embeddings, window_size=10, plot=True, save_path=None):
     from sklearn.metrics.pairwise import cosine_distances
     order = np.argsort(timestamps)
-    print(order)
     if timestamps is None:
         raise ValueError("Timestamps must be provided for decay analysis")
     if len(timestamps) != len(embeddings):
@@ -137,7 +167,10 @@ def decay_over_time(timestamps, embeddings, window_size=10, plot=True):
         plt.xlabel('Timestamps')
         plt.ylabel('Cosine Distance from Mean Reference')
         plt.grid()
-        plt.show()  
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()  
     return np.array(decay_scores), timestamps[window_size:]
 
 

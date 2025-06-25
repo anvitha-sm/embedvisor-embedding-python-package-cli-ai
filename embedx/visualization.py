@@ -1,6 +1,11 @@
 import umap
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
+try:
+    import faiss
+    FAISS_AVAILABLE = True
+except ImportError:
+    from sklearn.neighbors import NearestNeighbors
+    FAISS_AVAILABLE = False
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 
@@ -102,12 +107,23 @@ def visualize_clusters(embeddings, n_samples, labels=None, method="umap", dim=2,
         visualize_tsne(embeddings, n_samples, dim, labels, save_path)
 
 def visualize_neighbors(embeddings, threshold=0.95, n_neighbors=10, save_path=None):
-    nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
-    nn.fit(embeddings)
-    distances, indices = nn.kneighbors(embeddings)
+    if FAISS_AVAILABLE:
+        emb = self.embeddings.astype(np.float32)
+        faiss.normalize_L2(emb)
 
-    similarities = 1 - distances[:, 1:]
-    num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
+        index = faiss.IndexFlatIP(emb.shape[1])
+        index.add(emb)
+
+        distances, indices = index.search(emb, k=n_neighbors + 1)
+        similarities = 1 - distances[:, 1:].flatten()
+        num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
+    else:
+        nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
+        nn.fit(embeddings)
+        distances, indices = nn.kneighbors(embeddings)
+
+        similarities = 1 - distances[:, 1:]
+        num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
     plt.figure(figsize=(8, 6))
     plt.hist(num_neighbors_close, bins=20, color="orchid")
     plt.title(f"Histogram of neighbors with similarity >= {threshold}")
