@@ -6,10 +6,12 @@ import umap
 import matplotlib.pyplot as plt
 
 class Embedx:
-    def __init__(self, embeddings: np.ndarray, verbose: bool = True):
+    def __init__(self, embeddings: np.ndarray, verbose: bool = True, timestamps = None, labels = None):
         self.embeddings = embeddings
         self.n_samples, self.n_dim = embeddings.shape
         self.verbose = verbose
+        self.timestamps = timestamps
+        self.labels = labels
 
     def basic_stats(self):
         norms = np.linalg.norm(self.embeddings, axis=1)
@@ -68,18 +70,23 @@ class Embedx:
         mask = np.ones(self.n_samples, dtype=bool)
         mask[list(removing)] = False
         self.embeddings = self.embeddings[mask]
+        if self.timestamps is not None:
+            self.timestamps = self.timestamps[mask]
+        if self.labels is not None:
+            self.labels = self.labels[mask]
+        self.n_dim = self.embeddings.shape[1]
         self.n_samples = self.embeddings.shape[0]
         if self.verbose:
             print(f"{len(removing)} embeddings have been removed.")
         return self.basic_stats()
     
-    def visualize_umap(self, dim=2, labels=None, save_path=None):
+    def visualize_umap(self, dim=2, save_path=None):
         from .visualization import visualize_umap
-        visualize_umap(self.embeddings, self.n_samples, dim=dim, labels=labels, save_path=save_path)
+        visualize_umap(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
 
-    def visualize_tsne(self, dim=2, labels=None, save_path=None):
+    def visualize_tsne(self, dim=2, save_path=None):
         from .visualization import visualize_tsne
-        visualize_tsne(self.embeddings, self.n_samples, dim=dim, labels=labels, save_path=save_path)
+        visualize_tsne(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
 
     def visualize_neighbors(self, threshold=0.95, n_neighbors=10, save_path=None):
         from .visualization import visualize_neighbors
@@ -161,3 +168,27 @@ class Embedx:
     def cluster_embeddings(self, method="kmeans", **kwargs):
         from .cluster import cluster_embeddings
         return cluster_embeddings(self.embeddings, method=method, verbose = self.verbose, **kwargs)
+    
+    def intracluster_variance(self, plot=True):
+        from .advanced import intracluster_variance
+        return intracluster_variance(self.embeddings, self.labels, plot=plot)
+    
+    def intercluster_distance(self, plot=True):
+        from .advanced import intercluster_distance
+        return intercluster_distance(self.embeddings, self.labels, plot=plot)
+    
+    def compare_models(self, embeddings_2, plot=True):
+        from .advanced import compare_models
+        return compare_models(self.embeddings, embeddings_2, plot=plot)
+    
+    def semantic_coverage(self, top_n=5, plot=True):
+        from .advanced import semantic_coverage
+        return semantic_coverage(self.embeddings, self.labels, top_n=top_n, plot=plot)       
+    
+    def density(self, threshold, n_neighbors,  plot=True):
+        from .advanced import density
+        return density(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, plot=plot)
+    
+    def decay_over_time(self, window_size=10, plot=True):
+        from .advanced import decay_over_time
+        return decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True)
