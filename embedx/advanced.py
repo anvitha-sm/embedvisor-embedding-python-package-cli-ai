@@ -121,14 +121,14 @@ def density(embeddings, threshold=0.95, n_neighbors=10, plot=True, save_path=Non
         index = faiss.IndexFlatIP(emb.shape[1])
         index.add(emb)
         distances, _ = index.search(emb, n_neighbors + 1)
-        densities = np.mean(1 - distances[:, 1:], axis=1)
-        density_count = np.sum(densities >= threshold, axis=1)
+        similarities = 1 - distances[:, 1:]
+        density_count = np.sum(similarities >= threshold, axis=1)
     else:
         nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
         nn.fit(embeddings)
         distances, _ = nn.kneighbors(embeddings)
-        densities = 1 - distances[:, 1:] 
-        density_count = np.sum(densities >= threshold, axis=1)
+        similarities = 1 - distances[:, 1:] 
+        density_count = np.sum(similarities >= threshold, axis=1)
 
     if plot:
         plt.figure(figsize=(10, 6))
@@ -140,7 +140,7 @@ def density(embeddings, threshold=0.95, n_neighbors=10, plot=True, save_path=Non
             plt.savefig(save_path)
         else:
             plt.show()  
-    return densities, density_count
+    return similarities, density_count
 
 def decay_over_time(timestamps, embeddings, window_size=10, plot=True, save_path=None):
     from sklearn.metrics.pairwise import cosine_distances

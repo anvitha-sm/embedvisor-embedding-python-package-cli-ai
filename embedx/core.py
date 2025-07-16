@@ -6,6 +6,7 @@ except ImportError:
     from sklearn.neighbors import NearestNeighbors
     FAISS_AVAILABLE = False
 from sklearn.ensemble import IsolationForest
+from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import PCA
 import umap
 import matplotlib.pyplot as plt
@@ -17,6 +18,13 @@ class Embedx:
         self.verbose = verbose
         self.timestamps = timestamps
         self.labels = labels
+
+    @staticmethod
+    def generate_embeddings(texts, model_name="all-MiniLM-L6-v2", output_path="embeddings.npy"):
+        model = SentenceTransformer(model_name)
+        embeddings = model.encode(texts, batch_size=32, show_progress_bar=True)
+        np.save(output_path, embeddings)
+        return embeddings
 
     def basic_stats(self):
         norms = np.linalg.norm(self.embeddings, axis=1)
@@ -32,10 +40,11 @@ class Embedx:
     
     def find_duplicates(self, threshold=0.99, neighbors=10):
         if FAISS_AVAILABLE:
-            faiss.normalize_L2(self.embeddings.astype(np.float32))
+            emb = self.embeddings.astype(np.float32).copy()
+            faiss.normalize_L2(emb)
             index = faiss.IndexFlatIP(self.n_dim)
-            index.add(self.embeddings)
-            distances, indices = index.search(self.embeddings, neighbors + 1)
+            index.add(emb)
+            distances, indices = index.search(emb, neighbors + 1)
 
             duplicates = []
             for i, (dist_row, index_row) in enumerate(zip(distances, indices)):
@@ -55,8 +64,8 @@ class Embedx:
                         if i < index:
                             duplicates.append((i, index, 1 - dist))
         
-            if self.verbose:
-                print(f"Found {len(duplicates)} near-duplicates")
+        if self.verbose:
+            print(f"Found {len(duplicates)} near-duplicates")
         return duplicates
     
     def remove_duplicates(self, threshold=0.99, neighbors=10):
@@ -67,7 +76,7 @@ class Embedx:
         self._remove_indices(removing)
 
     def find_outliers(self, contamination=0.01):
-        iso = IsolationForest(contamination=contamination)
+        iso = IsolationForest(contamination=contamination, random_state=42)
         preds = iso.fit_predict(self.embeddings)
         outliers = np.where(preds == -1)[0]
         if self.verbose:
@@ -108,7 +117,7 @@ class Embedx:
 
     def visualize_neighbors(self, threshold=0.95, n_neighbors=10, save_path=None):
         from .visualization import visualize_neighbors
-        visualize_neighbors(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, save_path=save_path)
+        return visualize_neighbors(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, save_path=save_path)
 
     def visualize_norm_histogram(self, save_path=None):
         from .visualization import visualize_norms

@@ -108,22 +108,22 @@ def visualize_clusters(embeddings, n_samples, labels=None, method="umap", dim=2,
 
 def visualize_neighbors(embeddings, threshold=0.95, n_neighbors=10, save_path=None):
     if FAISS_AVAILABLE:
-        emb = self.embeddings.astype(np.float32)
+        emb = embeddings.astype(np.float32)
         faiss.normalize_L2(emb)
 
         index = faiss.IndexFlatIP(emb.shape[1])
         index.add(emb)
 
-        distances, indices = index.search(emb, k=n_neighbors + 1)
-        similarities = 1 - distances[:, 1:].flatten()
-        num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
+        distances, indices = index.search(emb, n_neighbors + 1)
+        similarities = 1 - distances[:, 1:]
+        num_neighbors_close = np.sum(similarities >= threshold, axis=1)
     else:
         nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
         nn.fit(embeddings)
         distances, indices = nn.kneighbors(embeddings)
 
         similarities = 1 - distances[:, 1:]
-        num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
+        num_neighbors_close = np.sum(similarities >= threshold, axis=1)
     plt.figure(figsize=(8, 6))
     plt.hist(num_neighbors_close, bins=20, color="orchid")
     plt.title(f"Histogram of neighbors with similarity >= {threshold}")

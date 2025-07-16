@@ -7,6 +7,15 @@ def cli():
     """Embedx CLI for embedding cleaning, analysis, and visualization."""
     pass
 
+@cli.command()
+@click.option("--input", "-i", required=True, type=str, help="Path to text file with one text entry per line.")
+@click.option("--model", "-m", default="all-MiniLM-L6-v2", type=str, help="Name of the sentence-transformers model to use.")
+@click.option("--output", "-o", required=True, type=str, help="Path to save the generated embeddings (.npy).")
+def embed(input, model, output):
+    with open(input, "r", encoding="utf-8") as f:
+        texts = [line.strip() for line in f if line.strip()]
+    Embedx.generate_embeddings(texts, model_name=model, output_path=output)
+
 def load_embeddings(path):
     if path.endswith(".npy"):
         return np.load(path)
@@ -193,7 +202,7 @@ def advanced():
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
 @click.option("--second", "-s", required=True, type=str, help="Path to second embeddings file (.npy or .csv) for comparison.")
-@click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
+@click.option("--save_path", "-o", type=str, help="Path to save the visualization image.")
 def compare(input, second, save_path=None):
     from embedx.core import Embedx
     embeddings = load_embeddings(input)
