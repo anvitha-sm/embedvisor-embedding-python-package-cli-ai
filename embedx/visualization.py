@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 
 def visualize_umap(embeddings, n_samples, dim=2, labels=None, save_path=None):
     if (dim == 2):
-        visualize_umap_2d(embeddings, n_samples, labels, save_path)
+        return visualize_umap_2d(embeddings, n_samples, labels, save_path)
     elif (dim == 3):
-        visualize_umap_3d(embeddings, n_samples, labels, save_path)
+        return visualize_umap_3d(embeddings, n_samples, labels, save_path)
     else:
         print("UMAPs must be in 2D or 3D")
 
@@ -21,16 +21,15 @@ def visualize_umap_2d(embeddings, n_samples, labels=None, save_path=None):
     reduce = umap.UMAP(n_components=2, n_neighbors=min(15, n_samples-1), random_state=3)
     embeddings_2d = reduce.fit_transform(embeddings)
 
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
     if labels is not None:
-        plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=labels, cmap="Spectral", s=5)
+        scatter = ax.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=labels, cmap="Spectral", s=5)
     else:   
-        plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], s=5)
-    plt.title("2D UMAP of Embeddings")
+        scatter = ax.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], s=5)
+    ax.set_title("2D UMAP of Embeddings")
     if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        fig.savefig(save_path)
+    return fig
 
 def visualize_umap_3d(embeddings, n_samples, labels=None, save_path=None):
     reduce = umap.UMAP(n_components=3, n_neighbors=min(15, n_samples-1), random_state=3)
@@ -39,14 +38,13 @@ def visualize_umap_3d(embeddings, n_samples, labels=None, save_path=None):
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111, projection='3d')
     if labels is not None:
-        ax.scatter(embeddings_3d[:,0], embeddings_3d[:,1], embeddings_3d[:,2], c=labels, cmap="Spectral", s=5)
+        scatter = ax.scatter(embeddings_3d[:,0], embeddings_3d[:,1], embeddings_3d[:,2], c=labels, cmap="Spectral", s=5)
     else:   
-        ax.scatter(embeddings_3d[:,0], embeddings_3d[:,1], embeddings_3d[:,2], s=5)
+        scatter = ax.scatter(embeddings_3d[:,0], embeddings_3d[:,1], embeddings_3d[:,2], s=5)
     ax.set_title("3D UMAP of Embeddings")
     if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        fig.savefig(save_path)
+    return fig
 
 def visualize_tsne(embeddings, n_samples, dim=2, labels=None, save_path=None):
     if n_samples < 100:
@@ -62,26 +60,25 @@ def visualize_tsne(embeddings, n_samples, dim=2, labels=None, save_path=None):
         perplexity = max(5, n_samples // 4)
         
     if (dim == 2):
-        visualize_tsne_2d(embeddings, perplexity, labels, save_path)
+        return visualize_tsne_2d(embeddings, perplexity, labels, save_path)
     elif (dim == 3):
-        visualize_tsne_3d(embeddings, perplexity, labels, save_path)
+        return visualize_tsne_3d(embeddings, perplexity, labels, save_path)
     else:
         print("t-SNEs must be in 2D or 3D")
 
 def visualize_tsne_2d(embeddings, perplexity, labels=None, save_path=None):
     tsne = TSNE(n_components=2, perplexity=perplexity, random_state=3)
     embeddings_2d = tsne.fit_transform(embeddings)
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
     if labels is not None:
-        plt.scatter(embeddings_2d[:,0], embeddings_2d[:,1], c=labels, cmap='Spectral', s=5)
+        scatter = ax.scatter(embeddings_2d[:,0], embeddings_2d[:,1], c=labels, cmap='Spectral', s=5)
     else:
-        plt.scatter(embeddings_2d[:,0], embeddings_2d[:,1], s=5)
-    plt.title("2D t-SNE of Embeddings")
+        scatter = ax.scatter(embeddings_2d[:,0], embeddings_2d[:,1], s=5)
+    ax.set_title("2D t-SNE of Embeddings")
 
     if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        fig.savefig(save_path)
+    return fig
 
 def visualize_tsne_3d(embeddings, perplexity, labels=None, save_path=None):
     tsne = TSNE(n_components=3, perplexity=perplexity, random_state=3)
@@ -95,16 +92,15 @@ def visualize_tsne_3d(embeddings, perplexity, labels=None, save_path=None):
     ax.set_title("3D t-SNE of Embeddings")
 
     if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        fig.savefig(save_path)
+    return fig
 
 def visualize_clusters(embeddings, n_samples, labels=None, method="umap", dim=2, save_path=None):
     method = method.lower()
     if (method == "umap"):
-        visualize_umap(embeddings, n_samples, dim, labels, save_path)
+        return visualize_umap(embeddings, n_samples, dim, labels, save_path)
     elif (method == "tsne"):
-        visualize_tsne(embeddings, n_samples, dim, labels, save_path)
+        return visualize_tsne(embeddings, n_samples, dim, labels, save_path)
 
 def visualize_neighbors(embeddings, threshold=0.95, n_neighbors=10, save_path=None):
     if FAISS_AVAILABLE:
@@ -114,37 +110,35 @@ def visualize_neighbors(embeddings, threshold=0.95, n_neighbors=10, save_path=No
         index = faiss.IndexFlatIP(emb.shape[1])
         index.add(emb)
 
-        distances, indices = index.search(emb, n_neighbors + 1)
-        similarities = 1 - distances[:, 1:]
-        num_neighbors_close = np.sum(similarities >= threshold, axis=1)
+        distances, indices = index.search(emb, k=n_neighbors + 1)
+        similarities = 1 - distances[:, 1:].flatten()
+        num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
     else:
         nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
         nn.fit(embeddings)
         distances, indices = nn.kneighbors(embeddings)
 
         similarities = 1 - distances[:, 1:]
-        num_neighbors_close = np.sum(similarities >= threshold, axis=1)
-    plt.figure(figsize=(8, 6))
-    plt.hist(num_neighbors_close, bins=20, color="orchid")
-    plt.title(f"Histogram of neighbors with similarity >= {threshold}")
-    plt.xlabel("Number of near neighbors per embedding")
-    plt.ylabel("Count")
+        num_neighbors_close = np.sum(similarities >= threshold, axis = 1)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.hist(num_neighbors_close, bins=20, color="orchid")
+    ax.set_title(f"Histogram of neighbors with similarity >= {threshold}")
+    ax.set_xlabel("Number of near neighbors per embedding")
+    ax.set_ylabel("Count")
 
     if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        fig.savefig(save_path, bbox_inches='tight')
+    return fig, similarities, num_neighbors_close
 
 def visualize_norms(embeddings, save_path = None):
     norms = np.linalg.norm(embeddings, axis=1)
-    plt.figure(figsize=(8, 6))
-    plt.hist(norms, bins = 50, color="orchid")
-    plt.title("Embedding Norm Distribution")
-    plt.xlabel("Norm")
-    plt.ylabel("Count of Norms")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.hist(norms, bins = 50, color="orchid")
+    ax.set_title("Embedding Norm Distribution")
+    ax.set_xlabel("Norm")
+    ax.set_ylabel("Count of Norms")
 
     if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        fig.savefig(save_path)
+    return fig
 

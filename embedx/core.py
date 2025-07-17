@@ -19,6 +19,16 @@ class Embedx:
         self.timestamps = timestamps
         self.labels = labels
 
+    def set_labels(self, labels):
+        self.labels = labels
+
+    def set_timestamps(self, timestamps):
+        self.timestamps = timestamps
+
+    def get_dims(self):
+        self.n_samples, self.n_dim = self.embeddings.shape
+        return self.n_samples, self.n_dim
+
     @staticmethod
     def generate_embeddings(texts, model_name="all-MiniLM-L6-v2", output_path="embeddings.npy"):
         model = SentenceTransformer(model_name)
@@ -26,6 +36,15 @@ class Embedx:
         np.save(output_path, embeddings)
         return embeddings
 
+    @staticmethod
+    def load_embeddings(path):
+        if path.endswith(".npy"):
+            return np.load(path)
+        elif path.endswith(".csv"):
+            return np.loadtxt(path, delimiter=",")
+        else:
+            raise ValueError("Unknown file format: must be .npy or .csv")
+    
     def basic_stats(self):
         norms = np.linalg.norm(self.embeddings, axis=1)
         if self.verbose:
@@ -107,27 +126,42 @@ class Embedx:
             print(f"{len(removing)} embeddings have been removed.")
         return self.basic_stats()
     
-    def visualize_umap(self, dim=2, save_path=None):
+    def visualize_umap(self, dim=2, save_path=None, display=False):
         from .visualization import visualize_umap
-        visualize_umap(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
+        fig = visualize_umap(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
+        if display:
+            fig.show()
+        return fig
 
-    def visualize_tsne(self, dim=2, save_path=None):
+    def visualize_tsne(self, dim=2, save_path=None, display=False):
         from .visualization import visualize_tsne
-        visualize_tsne(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
+        fig = visualize_tsne(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
+        if display:
+            fig.show()
+        return fig
 
-    def visualize_neighbors(self, threshold=0.95, n_neighbors=10, save_path=None):
+    def visualize_neighbors(self, threshold=0.95, n_neighbors=10, save_path=None, display=False):
         from .visualization import visualize_neighbors
-        return visualize_neighbors(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, save_path=save_path)
+        fig, similarity, neighbors = visualize_neighbors(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, save_path=save_path)
+        if display:
+            fig.show()
+        return fig, similarity, neighbors
 
-    def visualize_norm_histogram(self, save_path=None):
+    def visualize_norm_histogram(self, save_path=None, display=False):
         from .visualization import visualize_norms
-        visualize_norms(self.embeddings, save_path=save_path)
+        fig = visualize_norms(self.embeddings, save_path=save_path)
+        if display:
+            fig.show()
+        return fig
 
-    def cluster_visualize(self, cluster_method="kmeans", viz_method="umap", dim=2, save_path=None, **kwargs):
+    def cluster_visualize(self, cluster_method="kmeans", viz_method="umap", dim=2, save_path=None, display=False, **kwargs):
         from .cluster import cluster_embeddings
         from .visualization import visualize_clusters
         labels = cluster_embeddings(self.embeddings, method=cluster_method, verbose=self.verbose, **kwargs)
-        visualize_clusters(self.embeddings, self.n_samples, labels, method=viz_method, dim=dim, save_path=save_path)
+        fig = visualize_clusters(self.embeddings, self.n_samples, labels, method=viz_method, dim=dim, save_path=save_path)
+        if display:
+            fig.show()  
+        return fig, labels
 
     def center(self):
         mean = np.mean(self.embeddings, axis=0, keepdims = True)
@@ -148,7 +182,7 @@ class Embedx:
         if self.verbose:
             print(f"{method} normalization applied to embeddings.")
 
-    def whiten(self, n_components=None, whiten=True, transform=True, plot_variance=True):
+    def whiten(self, n_components=None, whiten=True, transform=True, plot_variance=True, save_path=None):
         if n_components is None or n_components > self.n_dim:
             n_components = self.n_dim
             print(f"Setting n_components to default {self.n_dim}")
@@ -162,16 +196,18 @@ class Embedx:
 
         if plot_variance:
             explained = np.cumsum(pca.explained_variance_ratio_)
-            plt.figure(figsize=(8, 6))
-            plt.plot(np.arange(1, len(explained)+1), explained, marker='o')
-            plt.title("PCA Total Variance Explained")
-            plt.xlabel("Number of Components")
-            plt.ylabel("Total Variance Explained")
-            plt.grid()
-            plt.show()
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.plot(np.arange(1, len(explained)+1), explained, marker='o')
+            ax.set_title("PCA Total Variance Explained")
+            ax.set_xlabel("Number of Components")
+            ax.set_ylabel("Total Variance Explained")
+            ax.grid()
+            if save_path:
+                fig.savefig(save_path, bbox_inches='tight')
+            return fig
 
     def variance_plot(self, n_components=None):
-        self.whiten(n_components, whiten=False, transform=False, plot_variance=True)
+        return self.whiten(n_components, whiten=False, transform=False, plot_variance=True)
 
     def remove_low_variance(self, threshold=0.001):
         variance = np.var(self.embeddings, axis=0)
@@ -196,30 +232,44 @@ class Embedx:
         from .cluster import cluster_embeddings
         return cluster_embeddings(self.embeddings, method=method, verbose = self.verbose, **kwargs)
     
-    def intracluster_variance(self, plot=True, save_path=None):
+    def intracluster_variance(self, plot=True, save_path=None, display=False):
         from .advanced import intracluster_variance
-        return intracluster_variance(self.embeddings, self.labels, plot=plot, save_path=save_path)
+        fig, variance = intracluster_variance(self.embeddings, self.labels, plot=plot, save_path=save_path)
+        if display:
+            fig.show()
+        return fig, variance
     
-    def intercluster_distance(self, plot=True, save_path=None):
+    def intercluster_distance(self, plot=True, save_path=None, display=False):
         from .advanced import intercluster_distance
-        return intercluster_distance(self.embeddings, self.labels, plot=plot, save_path=save_path)
+        fig, distance = intercluster_distance(self.embeddings, self.labels, plot=plot, save_path=save_path)
+        if display:
+            fig.show()
+        return fig, distance
     
-    def compare_models(self, embeddings_2, plot=True, save_path = None):
+    def compare_models(self, embeddings_2, plot=True, save_path = None, display=False):
         from .advanced import compare_models
-        return compare_models(self.embeddings, embeddings_2, plot=plot, save_path=save_path)
+        fig, similarity = compare_models(self.embeddings, embeddings_2, plot=plot, save_path=save_path)
+        if display:
+            fig.show()
+        return fig, similarity
     
-    def semantic_coverage(self, top_n=5, plot=True, save_path=None):
+    def semantic_coverage(self, top_n=5, plot=True, save_path=None, display=False):
         from .advanced import semantic_coverage
-        return semantic_coverage(self.embeddings, self.labels, top_n=top_n, plot=plot, save_path=save_path)       
+        fig, cov = semantic_coverage(self.embeddings, self.labels, top_n=top_n, plot=plot, save_path=save_path)     
+        if display:
+            fig.show()
+        return fig, cov  
     
-    def density(self, threshold, n_neighbors,  plot=True, save_path=None):
+    def density(self, threshold, n_neighbors, plot=True, save_path=None, display=False):
         from .advanced import density
-        return density(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, plot=plot, save_path=save_path)
+        fig, similarity, dens = density(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, plot=plot, save_path=save_path)
+        if display:
+            fig.show()
+        return fig, similarity, dens
     
-    def decay_over_time(self, window_size=10, plot=True, save_path=None):
+    def decay_over_time(self, window_size=10, plot=True, save_path=None, display=False):
         from .advanced import decay_over_time
-        return decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True, save_path=save_path)
-    
-    def adaptive_optimize(self, user_goal, n_trials=10, verbose=True):
-        from .assistant import optimize_embeddings
-        return optimize_embeddings(self, user_goal=user_goal, n_trials=n_trials, verbose=verbose)
+        fig, decay, time = decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True, save_path=save_path)
+        if display:
+            fig.show()
+        return fig, decay, time

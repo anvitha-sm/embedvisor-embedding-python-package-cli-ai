@@ -1,24 +1,23 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def compare_models(embeddings_a, embeddings_b, plot=True, save_path=None):
+def compare_models(embeddings_a, embeddings_b, plot=True, save_path=None, display=False):
     from sklearn.metrics.pairwise import cosine_similarity
     assert embeddings_a.shape == embeddings_b.shape, "Embeddings must have same shape"
     cosine_sim = cosine_similarity(embeddings_a, embeddings_b)
     avg_similarity = np.mean(cosine_sim)
 
     if plot:
-        plt.figure(figsize=(10, 6))
-        plt.hist(cosine_sim.flatten(), bins=50, color='orchid')
-        plt.title('Cosine Similarity Distribution')
-        plt.xlabel('Cosine Similarity')
-        plt.ylabel('Frequency')
-        plt.axvline(avg_similarity, color='purple', linestyle='dashed', linewidth=1)
-        plt.text(avg_similarity + 0.01, 5, f'Avg: {avg_similarity:.2f}', color='purple')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(cosine_sim.flatten(), bins=50, color='orchid')
+        ax.set_title('Cosine Similarity Distribution')
+        ax.set_xlabel('Cosine Similarity')
+        ax.set_ylabel('Frequency')
+        ax.axvline(avg_similarity, color='purple', linestyle='dashed', linewidth=1)
+        ax.text(avg_similarity + 0.01, 5, f'Avg: {avg_similarity:.2f}', color='purple')
         if save_path is not None:
-            plt.savefig(save_path)
-        else:
-            plt.show()  
+            fig.savefig(save_path) 
+        return fig, avg_similarity
     return avg_similarity
 
 def semantic_coverage(embeddings, labels, top_n=10, plot=True, save_path=None):
@@ -39,16 +38,15 @@ def semantic_coverage(embeddings, labels, top_n=10, plot=True, save_path=None):
     top_coverage = sorted_coverage[:top_n]
 
     if plot:
-        plt.figure(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         labels, values = zip(*top_coverage)
-        plt.bar(labels, values, color='orchid')
-        plt.title('Top Semantic Coverage by Cluster')
-        plt.xlabel('Cluster Labels')
-        plt.ylabel('Average Distance')
+        ax.bar(labels, values, color='orchid')
+        ax.set_title('Top Semantic Coverage by Cluster')
+        ax.set_xlabel('Cluster Labels')
+        ax.set_ylabel('Average Distance')
         if save_path is not None:
-            plt.savefig(save_path)
-        else:
-            plt.show()  
+            fig.savefig(save_path)
+        return fig, {label: coverage for label, coverage in top_coverage}
     return {label: coverage for label, coverage in top_coverage}
 
 def intracluster_variance(embeddings, labels, plot=True, save_path=None):
@@ -63,16 +61,15 @@ def intracluster_variance(embeddings, labels, plot=True, save_path=None):
             variance_dict[label] = 0.0
 
     if plot:
-        plt.figure(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         labels, variances = zip(*variance_dict.items())
-        plt.bar(labels, variances, color='orchid')
-        plt.title('Intracluster Variance by Cluster')
-        plt.xlabel('Cluster Labels')
-        plt.ylabel('Mean Variance')
+        ax.bar(labels, variances, color='orchid')
+        ax.set_title('Intracluster Variance by Cluster')
+        ax.set_xlabel('Cluster Labels')
+        ax.set_ylabel('Mean Variance')
         if save_path is not None:
-            plt.savefig(save_path)
-        else:
-            plt.show()  
+            fig.savefig(save_path)
+        return fig, variance_dict  
     return variance_dict
 
 def intercluster_distance(embeddings, labels, plot=True, save_path=None):
@@ -95,16 +92,15 @@ def intercluster_distance(embeddings, labels, plot=True, save_path=None):
 
     if plot:
         import seaborn as sns
-        plt.figure(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(8, 6))
         sns.heatmap(distances, xticklabels=unique_labels, yticklabels=unique_labels,
                     cmap='OrRd', annot=True, fmt=".2f")
-        plt.title('Intercluster Distance Matrix')
-        plt.xlabel('Cluster')
-        plt.ylabel('Cluster')
+        ax.set_title('Intercluster Distance Matrix')
+        ax.set_xlabel('Cluster')
+        ax.set_ylabel('Cluster')
         if save_path is not None:
-            plt.savefig(save_path)
-        else:
-            plt.show()  
+            fig.savefig(save_path)
+        return fig, inter_distances 
     return inter_distances
 
 def density(embeddings, threshold=0.95, n_neighbors=10, plot=True, save_path=None):
@@ -131,15 +127,14 @@ def density(embeddings, threshold=0.95, n_neighbors=10, plot=True, save_path=Non
         density_count = np.sum(similarities >= threshold, axis=1)
 
     if plot:
-        plt.figure(figsize=(10, 6))
-        plt.hist(density_count, bins=20, color='orchid')
-        plt.title(f'Embedding Density Histogram (Threshold: {threshold})')
-        plt.xlabel('Number of Neighbors Above Threshold')
-        plt.ylabel('Count')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(density_count, bins=20, color='orchid')
+        ax.set_title(f'Embedding Density Histogram (Threshold: {threshold})')
+        ax.set_xlabel('Number of Neighbors Above Threshold')
+        ax.set_ylabel('Count')
         if save_path is not None:
-            plt.savefig(save_path)
-        else:
-            plt.show()  
+            fig.savefig(save_path)
+        return fig, similarities, density_count
     return similarities, density_count
 
 def decay_over_time(timestamps, embeddings, window_size=10, plot=True, save_path=None):
@@ -161,16 +156,15 @@ def decay_over_time(timestamps, embeddings, window_size=10, plot=True, save_path
         mean_reference = np.mean(embeddings[i-window_size+1:i+1], axis=0, keepdims=True)  
 
     if plot:
-        plt.figure(figsize=(10, 6))
-        plt.plot(timestamps[window_size:], decay_scores, marker='o', color='orchid')
-        plt.title('Embedding Decay Over Time')
-        plt.xlabel('Timestamps')
-        plt.ylabel('Cosine Distance from Mean Reference')
-        plt.grid()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(timestamps[window_size:], decay_scores, marker='o', color='orchid')
+        ax.title('Embedding Decay Over Time')
+        ax.set_xlabel('Timestamps')
+        ax.set_ylabel('Cosine Distance from Mean Reference')
+        ax.grid()
         if save_path is not None:
-            plt.savefig(save_path)
-        else:
-            plt.show()  
+            fig.savefig(save_path)
+        return fig, np.array(decay_scores), timestamps[window_size:] 
     return np.array(decay_scores), timestamps[window_size:]
 
 
