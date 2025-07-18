@@ -9,7 +9,7 @@ load_dotenv()
 CLIENT_ID = os.getenv("CLIENT_ID")
 TENANT_ID = os.getenv("TENANT_ID") or "common"
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
-SCOPE = ["Files.Read.All"]
+SCOPE = ["Files.Read.All", "Files.ReadWrite.All"]
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 
 def start_device_flow():
@@ -39,3 +39,10 @@ def download_file(token, file_id):
         return BytesIO(response.content)
     else:
         raise Exception(f"Failed to download file: {response.status_code} {response.text}")
+    
+def upload_to_onedrive(filename, file_bytes, token):
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"}
+    upload_url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{filename}:/content"
+    response = requests.put(upload_url, headers=headers, data=file_bytes)
+    response.raise_for_status()
+    return response.json()

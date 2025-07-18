@@ -8,6 +8,28 @@ from graph_api import start_device_flow, acquire_token, list_excel_files, downlo
 st.set_page_config(page_title="Excipher", layout="wide")
 st.title("Excipher: Process and Visualize Excel Data")
 
+def connect_to_onedrive():
+    if st.session_state.token is None:
+        try:
+            app, flow, message = start_device_flow()
+            st.session_state.auth_app = app
+            st.session_state.auth_flow = flow
+            st.session_state.device_flow_message = message
+            st.session_state.awaiting_auth = True
+            st.session_state.show_picker = False 
+        except Exception as e:
+            st.error(f"Could not start Device Code Flow:\n\n{e}")
+    if st.session_state.awaiting_auth:
+        st.info("Follow these instructions to authorize Excipher on OneDrive:")
+        st.code(st.session_state.device_flow_message)
+
+        result = acquire_token(st.session_state.auth_app, st.session_state.auth_flow)
+        if "access_token" in result:
+            st.session_state.token = result["access_token"]
+            st.session_state.excel_files = list_excel_files(st.session_state.token)
+            st.session_state.show_picker = True
+            st.session_state.awaiting_auth = False
+
 def get_all_embeddings(selected_columns, all_embeddings):
     if not selected_columns:
         st.error("Please select at least one column.")
@@ -186,56 +208,39 @@ if st.session_state.df is not None:
             st.success("Embeddings generated!")  
 
     with col_format:
-        cola, colb = st.columns(2)
+        cola, colb = st.columns([2, 1.2])
         with cola:
-            file_format = st.radio("Format", ["npy", "csv"], horizontal=True)
+            col1, col2 = st.columns([2, 3])
+            with col1:
+                file_format = st.radio("Format", ["npy", "csv"], horizontal=True)
+            with col2:
+                destination = st.radio("Destination", ["Download", "OneDrive"], horizontal=True)
+            filename = st.text_input("Filename", value=f"transformed_embeddings.{file_format}")
         with colb:
-            destination = st.radio("Destination", ["Download", "OneDrive"], horizontal=True)
-        filename = st.text_input("Filename", value=f"transformed_embeddings.{file_format}")
+            if st.button("Save Embeddings"):
+                data = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+                if data is not None:
+                    if file_format == "npy":
+                        bytes_data = io.BytesIO()
+                        np.save(bytes_data, data)
+                        bytes_data.seek(0)
+                    else:
+                        df = pd.DataFrame(data)
+                        bytes_data = io.BytesIO()
+                        df.to_csv(bytes_data, index=False)
+                        bytes_data.seek(0)
 
-    if st.button("Save Embeddings"):
-        data = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
-        if data is not None:
-            if file_format == "npy":
-                bytes_data = io.BytesIO()
-                np.save(bytes_data, data)
-                bytes_data.seek(0)
-            else:
-                df = pd.DataFrame(data)
-                bytes_data = io.BytesIO()
-                df.to_csv(bytes_data, index=False)
-                bytes_data.seek(0)
-
-            if destination == "Download":
-                st.download_button(
-                    label="Download File",
-                    data=bytes_data,
-                    file_name=filename,
-                    mime="application/octet-stream"
-                )
-            else:
-                if st.session_state.token is None:
-                    try:
-                        app, flow, message = start_device_flow()
-                        st.session_state.auth_app = app
-                        st.session_state.auth_flow = flow
-                        st.session_state.device_flow_message = message
-                        st.session_state.awaiting_auth = True
-                        st.session_state.show_picker = False 
-                    except Exception as e:
-                        st.error(f"Could not start Device Code Flow:\n\n{e}")
-                if st.session_state.awaiting_auth:
-                    st.info("Follow these instructions to authorize Excipher on OneDrive:")
-                    st.code(st.session_state.device_flow_message)
-
-                    result = acquire_token(st.session_state.auth_app, st.session_state.auth_flow)
-                    if "access_token" in result:
-                        st.session_state.token = result["access_token"]
-                        st.session_state.excel_files = list_excel_files(st.session_state.token)
-                        st.session_state.show_picker = True
-                        st.session_state.awaiting_auth = False
+                    if destination == "Download":
+                        st.download_button(
+                            label="Download File",
+                            data=bytes_data,
+                            file_name=filename,
+                            mime="application/octet-stream"
+                        )
+                    else:
+                        connect_to_onedrive()
                         upload_to_onedrive(filename, bytes_data.getvalue(), st.session_state.token)
-        st.success("Embeddings saved as " + filename + " to " + destination + "!")
+                        st.success(f"Embeddings saved as {filename} to OneDrive!")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -343,8 +348,14 @@ with col2:
     st.subheader("☆ Visualize ☆")
     st.markdown("---")
     st.markdown("### UMAP")
-    dim_umap = st.selectbox("Dimensionality", [2, 3], key="umap_dim")
-    save_plot = st.checkbox("Save plot to file", key="umap_save_plot")
+    dim_umap = st.radio("Dimensionality", [2, 3], horizontal=True, key="umap_dim")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_umap"
+        )
+
     if st.button("Run UMAP"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
@@ -353,18 +364,42 @@ with col2:
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
             if st.session_state.labels != "None":
-                labels = st.session_state.df[st.session_state.labels].values
+                if type(st.session_state.labels) is str:
+                    labels = st.session_state.df[st.session_state.labels].values
+                else:
+                    labels = st.session_state.labels
                 embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
             else:
                 embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
-                fig = embedx.visualize_umap(dim=dim_umap, save_path="outputs/umap_plot.png" if save_plot else None)
+                fig = embedx.visualize_umap(dim=dim_umap)
+                if save_plot_option != "None":
+                    filename= f"umap_plot_{dim_umap}d.png"
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format="png", bbox_inches="tight")
+                    buffer.seek(0)
+                    if save_plot_option == "Download":
+                        st.download_button(
+                            label="Download Plot",
+                            data=buffer,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_button_umap"
+                        )
+                    elif save_plot_option == "OneDrive":
+                        connect_to_onedrive()
+                        upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
                 st.pyplot(fig)
                 update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### t-SNE")
-    dim_tsne = st.selectbox("Dimensionality", [2, 3], key="tsne_dim")
-    save_plot = st.checkbox("Save plot to file", key="tsne_save_plot")
+    dim_tsne = st.radio("Dimensionality", [2, 3], horizontal=True, key="tsne_dim")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_tsne"
+        )
     if st.button("Run t-SNE"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
@@ -373,40 +408,101 @@ with col2:
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
             if st.session_state.labels != "None":
-                labels = st.session_state.df[st.session_state.labels].values
+                if type(st.session_state.labels) is str:
+                    labels = st.session_state.df[st.session_state.labels].values
+                else:
+                    labels = st.session_state.labels
                 embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
             else:
                 embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
-                fig = embedx.visualize_tsne(dim=dim_tsne, save_path="outputs/tsne_plot.png" if save_plot else None)
+                fig = embedx.visualize_tsne(dim=dim_tsne)
+                if save_plot_option != "None":
+                    filename= f"tsne_plot_{dim_tsne}d.png"
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format="png", bbox_inches="tight")
+                    buffer.seek(0)
+                    if save_plot_option == "Download":
+                        st.download_button(
+                            label="Download Plot",
+                            data=buffer,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_button_tsne"
+                        )
+                    elif save_plot_option == "OneDrive":
+                        connect_to_onedrive()
+                        upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
                 st.pyplot(fig)
                 update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Neighbors")
     n_neighbors = st.number_input("Neighbors", value=10, key="neighbors_count")
     threshold_neighbors = st.number_input("Threshold", value=0.95, key="neighbors_threshold")
-    save_plot = st.checkbox("Save plot to file")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_neigh"
+        )
     if st.button("Visualize Neighbors"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
             embedx = Embedx(combined_embeddings, verbose=False)
-            fig, similarites, num_neighbors_close = embedx.visualize_neighbors(threshold=threshold_neighbors, n_neighbors=n_neighbors, save_path="outputs/neighbors_plot.png" if save_plot else None)
+            fig, similarites, num_neighbors_close = embedx.visualize_neighbors(threshold=threshold_neighbors, n_neighbors=n_neighbors)
+            if save_plot_option != "None":
+                    filename= f"neighbors_plot.png"
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format="png", bbox_inches="tight")
+                    buffer.seek(0)
+                    if save_plot_option == "Download":
+                        st.download_button(
+                            label="Download Plot",
+                            data=buffer,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_button_neigh"
+                        )
+                    elif save_plot_option == "OneDrive":
+                        connect_to_onedrive()
+                        upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
             st.pyplot(fig)
             st.write(f"Similarities: {similarites}")
             st.write(f"Number of neighbors close: {num_neighbors_close}")
             update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Norms")
-    save_plot = st.checkbox("Save plot to file", key="save_plot_clusters")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_norms"
+        )
     if st.button("Visualize Norms"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
             embedx = Embedx(combined_embeddings, verbose=False)
-            fig = embedx.visualize_norm_histogram(save_path="outputs/norm_histogram_plot.png" if save_plot else None)
+            fig = embedx.visualize_norm_histogram()
+            if save_plot_option != "None":
+                    filename= f"norms_plot.png"
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format="png", bbox_inches="tight")
+                    buffer.seek(0)
+                    if save_plot_option == "Download":
+                        st.download_button(
+                            label="Download Plot",
+                            data=buffer,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_button_norms"
+                        )
+                    elif save_plot_option == "OneDrive":
+                        connect_to_onedrive()
+                        upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
             st.pyplot(fig)
             update_embeddings(embedx, st.session_state.selected_columns)
 
@@ -422,7 +518,12 @@ with col3:
     min_samples = st.number_input("Minimum Samples", value=5, key="min_samples_value")
     min_cluster_size = st.number_input("Minimum Cluster Size", value=5, key="min_cluster_size_value")
     n_components_cluster = st.number_input("Number of Components", value=10, key="n_components_cluster_value")
-    save_plot = st.checkbox("Save plot to file", key="save_plot_clusters_embeds")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_clusters"
+        )
     if st.button("Run Cluster"):
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
@@ -442,22 +543,159 @@ with col3:
                     kwargs["n_components"] = n_components_cluster
                 labels = embedx.cluster_embeddings(method=cluster_method, **kwargs)
                 embedx.set_labels(labels)
+                fig = None
                 if visualization_method =="umap":
                     fig = embedx.visualize_umap(dim=dim_viz_clusters, save_path="cluster_umap_plot.png" if save_plot else None)
                     st.pyplot(fig)
                 elif visualization_method == "tsne":
                     fig = embedx.visualize_tsne(dim=dim_viz_clusters, save_path="cluster_tsne_plot.png" if save_plot else None)
                     st.pyplot(fig)
+                if fig is not None:
+                    st.pyplot(fig)
+                    if save_plot_option != "None":
+                        filename= f"{cluster_method}_plot_{visualization_method}.png"
+                        buffer = io.BytesIO()
+                        fig.savefig(buffer, format="png", bbox_inches="tight")
+                        buffer.seek(0)
+                        if save_plot_option == "Download":
+                            st.download_button(
+                                label="Download Plot",
+                                data=buffer,
+                                file_name=filename,
+                                mime="image/png",
+                                key=f"download_button_tsne"
+                            )
+                        elif save_plot_option == "OneDrive":
+                            connect_to_onedrive()
+                            upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
                 st.write(labels)
                 st.session_state.labels = labels
             else:
                 st.error("Load embeddings first!")
 
-    st.markdown("### Compare Models")
-    st.warning("Add a file input for second embeddings here!")
-
     st.markdown("### Semantic Coverage")
-    st.warning("Add UI for labels input and top_n here!")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_semantic"
+        )
+    if st.button("Run Semantic Coverage"):
+        if len(st.session_state.selected_columns) == 0:
+            st.error("Load an input file, generate embeddings, and select columns first!")
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            if st.session_state.labels != "None":
+                if type(st.session_state.labels) is str:
+                    labels = st.session_state.df[st.session_state.labels].values
+                else:
+                    labels = st.session_state.labels
+                embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
+            else:
+                embedx = Embedx(combined_embeddings, verbose=False)
+            fig, coverages = embedx.semantic_coverage()
+            if save_plot_option != "None":
+                filename= f"semantic_plot.png"
+                buffer = io.BytesIO()
+                fig.savefig(buffer, format="png", bbox_inches="tight")
+                buffer.seek(0)
+                if save_plot_option == "Download":
+                    st.download_button(
+                        label="Download Plot",
+                        data=buffer,
+                        file_name=filename,
+                        mime="image/png",
+                        key=f"download_button_semantic"
+                    )
+                elif save_plot_option == "OneDrive":
+                    connect_to_onedrive()
+                    upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
+            st.pyplot(fig)
+            df_coverages = pd.DataFrame(list(coverages.items()), columns=["Cluster Label", "Coverage"])
+            st.table(df_coverages)
+            update_embeddings(embedx, st.session_state.selected_columns)
+    
 
-    st.markdown("### Intra/Inter Cluster & Others")
-    st.warning("Add UI for advanced metrics like intracluster_variance, intercluster_distance, density, decay, etc.")
+    st.markdown("### Intracluster Variance")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_intra"
+        )
+    if st.button("Run Intracluster Variance"):
+        if len(st.session_state.selected_columns) == 0:
+            st.error("Load an input file, generate embeddings, and select columns first!")
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            if st.session_state.labels != "None":
+                if type(st.session_state.labels) is str:
+                    labels = st.session_state.df[st.session_state.labels].values
+                else:
+                    labels = st.session_state.labels
+                embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
+            else:
+                embedx = Embedx(combined_embeddings, verbose=False)
+            fig, variances = embedx.intracluster_variance()
+            if save_plot_option != "None":
+                filename= f"intra_plot.png"
+                buffer = io.BytesIO()
+                fig.savefig(buffer, format="png", bbox_inches="tight")
+                buffer.seek(0)
+                if save_plot_option == "Download":
+                    st.download_button(
+                        label="Download Plot",
+                        data=buffer,
+                        file_name=filename,
+                        mime="image/png",
+                        key=f"download_button_intra"
+                    )
+                elif save_plot_option == "OneDrive":
+                    connect_to_onedrive()
+                    upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
+            st.pyplot(fig)
+            df_variances = pd.DataFrame(list(variances.items()), columns=["Cluster Label", "Intra-cluster Variance"])
+            st.table(df_variances)
+            update_embeddings(embedx, st.session_state.selected_columns)
+
+    st.markdown("### Intercluster Distance")
+    save_plot_option = st.radio(
+        "Save plot as:",
+            ["None", "Download", "OneDrive"],
+            horizontal=True,
+            key=f"save_option_inter"
+        )
+    if st.button("Run Intercluster Distance"):
+        if len(st.session_state.selected_columns) == 0:
+            st.error("Load an input file, generate embeddings, and select columns first!")
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            if st.session_state.labels != "None":
+                if type(st.session_state.labels) is str:
+                    labels = st.session_state.df[st.session_state.labels].values
+                else:
+                    labels = st.session_state.labels
+                embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
+            else:
+                embedx = Embedx(combined_embeddings, verbose=False)
+            fig, dists = embedx.intercluster_distance()
+            if save_plot_option != "None":
+                    filename= f"inter_plot.png"
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format="png", bbox_inches="tight")
+                    buffer.seek(0)
+                    if save_plot_option == "Download":
+                        st.download_button(
+                            label="Download Plot",
+                            data=buffer,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_button_inter"
+                        )
+                    elif save_plot_option == "OneDrive":
+                        connect_to_onedrive()
+                        upload_to_onedrive(filename, buffer.getvalue(), st.session_state.token)
+            st.pyplot(fig)
+            df_dists = pd.DataFrame(list(dists.items()), columns=["Cluster Pair", "Inter-cluster Distance"])
+            st.table(df_dists)
+            update_embeddings(embedx, st.session_state.selected_columns)

@@ -20,7 +20,7 @@ def compare_models(embeddings_a, embeddings_b, plot=True, save_path=None, displa
         return fig, avg_similarity
     return avg_similarity
 
-def semantic_coverage(embeddings, labels, top_n=10, plot=True, save_path=None):
+def semantic_coverage(embeddings, labels, plot=True, save_path=None):
     from sklearn.metrics.pairwise import cosine_distances
     labels = np.array(labels)
     unique_labels = np.unique(labels)
@@ -35,19 +35,18 @@ def semantic_coverage(embeddings, labels, top_n=10, plot=True, save_path=None):
             coverage_dict[label] = 0.0
 
     sorted_coverage = sorted(coverage_dict.items(), key=lambda x: x[1], reverse=True)
-    top_coverage = sorted_coverage[:top_n]
 
     if plot:
         fig, ax = plt.subplots(figsize=(10, 6))
-        labels, values = zip(*top_coverage)
+        labels, values = zip(*sorted_coverage)
         ax.bar(labels, values, color='orchid')
         ax.set_title('Top Semantic Coverage by Cluster')
         ax.set_xlabel('Cluster Labels')
         ax.set_ylabel('Average Distance')
         if save_path is not None:
             fig.savefig(save_path)
-        return fig, {label: coverage for label, coverage in top_coverage}
-    return {label: coverage for label, coverage in top_coverage}
+        return fig, {label: coverage for label, coverage in sorted_coverage}
+    return {label: coverage for label, coverage in sorted_coverage}
 
 def intracluster_variance(embeddings, labels, plot=True, save_path=None):
     variance_dict = {}
@@ -63,7 +62,7 @@ def intracluster_variance(embeddings, labels, plot=True, save_path=None):
     if plot:
         fig, ax = plt.subplots(figsize=(10, 6))
         labels, variances = zip(*variance_dict.items())
-        ax.bar(labels, variances, color='orchid')
+        ax.bar([str(label) for label in labels], variances, color='orchid')
         ax.set_title('Intracluster Variance by Cluster')
         ax.set_xlabel('Cluster Labels')
         ax.set_ylabel('Mean Variance')
@@ -83,6 +82,10 @@ def intercluster_distance(embeddings, labels, plot=True, save_path=None):
             centroid = np.mean(cluster_embeddings, axis=0)
             centroids.append(centroid)
     centroids = np.array(centroids)
+    if centroids.ndim > 2:
+        centroids = centroids.reshape(centroids.shape[0], -1)
+    elif centroids.ndim == 1:
+        centroids = centroids.reshape(1, -1)
     distances = cosine_distances(centroids)
     inter_distances = {}
     for i, label_i in enumerate(unique_labels):

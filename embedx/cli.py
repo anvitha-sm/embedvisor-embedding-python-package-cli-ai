@@ -232,7 +232,6 @@ def compare(input, second, save_path=None, display=False):
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")
-@click.option("--top_n", "-n", default=5, type=int, help="Number of top items to consider for semantic coverage.")
 @click.option("--labels", "-l", required=True, type=str, help="Path to cluster labels (.csv)")
 @click.option("--save_path", "-s", type=str, help="Path to save the visualization image.")
 @click.option("--display", "-d", is_flag=True, help="Display the semantic coverage in a window.")
@@ -242,7 +241,7 @@ def semantic_coverage(input, top_n, labels, save_path=None, display=False):
     label = np.loadtxt(labels, dtype=int)
 
     embedx = Embedx(embeddings, labels=label, verbose=True)
-    embedx.semantic_coverage(top_n=top_n, plot=True, save_path=save_path, display=display)
+    embedx.semantic_coverage(plot=True, save_path=save_path, display=display)
 
 @advanced.command()
 @click.option("--input", "-i", required=True, type=str, help="Path to input embeddings file (.npy or .csv).")

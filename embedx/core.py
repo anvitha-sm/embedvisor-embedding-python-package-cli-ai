@@ -157,7 +157,10 @@ class Embedx:
     def cluster_visualize(self, cluster_method="kmeans", viz_method="umap", dim=2, save_path=None, display=False, **kwargs):
         from .cluster import cluster_embeddings
         from .visualization import visualize_clusters
-        labels = cluster_embeddings(self.embeddings, method=cluster_method, verbose=self.verbose, **kwargs)
+        if "method" in kwargs:
+            labels = cluster_embeddings(self.embeddings, verbose=self.verbose, **kwargs)
+        else:
+            labels = cluster_embeddings(self.embeddings, method=cluster_method, verbose=self.verbose, **kwargs)
         fig = visualize_clusters(self.embeddings, self.n_samples, labels, method=viz_method, dim=dim, save_path=save_path)
         if display:
             fig.show()  
@@ -253,9 +256,9 @@ class Embedx:
             fig.show()
         return fig, similarity
     
-    def semantic_coverage(self, top_n=5, plot=True, save_path=None, display=False):
+    def semantic_coverage(self, plot=True, save_path=None, display=False):
         from .advanced import semantic_coverage
-        fig, cov = semantic_coverage(self.embeddings, self.labels, top_n=top_n, plot=plot, save_path=save_path)     
+        fig, cov = semantic_coverage(self.embeddings, self.labels, plot=plot, save_path=save_path)     
         if display:
             fig.show()
         return fig, cov  
