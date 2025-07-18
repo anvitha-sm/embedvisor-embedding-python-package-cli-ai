@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from embedx.core import Embedx
-from graph_api import start_device_flow, acquire_token, list_excel_files, download_file
+import io
+from graph_api import start_device_flow, acquire_token, list_excel_files, download_file, upload_to_onedrive
 
 st.set_page_config(page_title="Excipher", layout="wide")
 st.title("Excipher: Process and Visualize Excel Data")
@@ -22,6 +23,31 @@ def get_all_embeddings(selected_columns, all_embeddings):
         arrays.append(arr)
     combined = np.hstack(arrays)
     return combined
+
+def update_embeddings(embedx, selected_columns):
+    start = 0
+    for col in selected_columns:
+        original = st.session_state.embeddings[col]
+        dim = 1 if original.ndim == 1 else original.shape[1]
+        end = start + dim
+        st.session_state.embeddings[col] = embedx.embeddings[:, start:end]
+        if dim == 1:
+            st.session_state.embeddings[col] = st.session_state.embeddings[col].squeeze()
+        start = end
+
+def update_session_embeddings(embedx, selected_columns):
+    if embedx.embeddings.shape[1] != sum(st.session_state.embeddings[col].shape[1] if len(st.session_state.embeddings[col].shape) > 1 else 1 for col in selected_columns):
+        st.warning("Skipping update: shape mismatch after transformation.")
+        return
+    start = 0
+    for col in selected_columns:
+        col_data = st.session_state.embeddings[col]
+        col_dim = col_data.shape[1] if len(col_data.shape) > 1 else 1
+        updated = embedx.embeddings[:, start:start+col_dim]
+        if col_dim == 1:
+            updated = updated.flatten()
+        st.session_state.embeddings[col] = updated
+        start += col_dim
 
 if "df" not in st.session_state:
     st.session_state.df = None
@@ -43,6 +69,8 @@ if "embeddings" not in st.session_state:
     st.session_state.embeddings = {}
 if "selected_columns" not in st.session_state:
     st.session_state.selected_columns = []
+if "labels" not in st.session_state:
+    st.session_state.labels = None
 
 with st.sidebar:
     st.header("Upload File")
@@ -63,7 +91,11 @@ with st.sidebar:
     st.markdown("---")
     uploaded_file = st.file_uploader("Or upload Excel/csv file", type=["xlsx", "csv"], key="upload_file")
     if uploaded_file:
-        df = pd.read_excel(uploaded_file)
+        file_extension = uploaded_file.name.split('.')[-1].lower()
+        if file_extension == "csv":
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
         st.session_state.df = df
         st.session_state.show_picker = False
         st.session_state.awaiting_auth = False 
@@ -134,21 +166,76 @@ if st.session_state.df is not None:
         all_columns,
         default=all_columns 
     )
-    st.session_state.label_column = st.selectbox(
+    st.session_state.labels = st.selectbox(
         "Select label column (optional):",
         ["None"] + all_columns
     )
 
-    if st.button("Generate Embeddings"):
-        for col in st.session_state.df.columns:
-            col_dtype = st.session_state.df[col].dtype
-            if col_dtype == "object":
-                texts = st.session_state.df[col].dropna().astype(str).tolist()
-                embeddings = Embedx.generate_embeddings(texts, model_name="all-MiniLM-L6-v2")
-                st.session_state.embeddings[col] = embeddings
+    col_gen, col_format, col_save = st.columns([1.5, 1, 1])
+
+    with col_gen:
+        if st.button("Generate Embeddings"):
+            for col in st.session_state.df.columns:
+                col_dtype = st.session_state.df[col].dtype
+                if col_dtype == "object":
+                    texts = st.session_state.df[col].dropna().astype(str).tolist()
+                    embeddings = Embedx.generate_embeddings(texts, model_name="all-MiniLM-L6-v2")
+                    st.session_state.embeddings[col] = embeddings
+                else:
+                    st.session_state.embeddings[col] = st.session_state.df[col].dropna().values.astype(np.float64).reshape(-1, 1)
+            st.success("Embeddings generated!")  
+
+    with col_format:
+        cola, colb = st.columns(2)
+        with cola:
+            file_format = st.radio("Format", ["npy", "csv"], horizontal=True)
+        with colb:
+            destination = st.radio("Destination", ["Download", "OneDrive"], horizontal=True)
+        filename = st.text_input("Filename", value=f"transformed_embeddings.{file_format}")
+
+    if st.button("Save Embeddings"):
+        data = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if data is not None:
+            if file_format == "npy":
+                bytes_data = io.BytesIO()
+                np.save(bytes_data, data)
+                bytes_data.seek(0)
             else:
-                st.session_state.embeddings[col] = st.session_state.df[col].dropna().values.astype(np.float64).reshape(-1, 1)
-        st.success("Embeddings generated!")
+                df = pd.DataFrame(data)
+                bytes_data = io.BytesIO()
+                df.to_csv(bytes_data, index=False)
+                bytes_data.seek(0)
+
+            if destination == "Download":
+                st.download_button(
+                    label="Download File",
+                    data=bytes_data,
+                    file_name=filename,
+                    mime="application/octet-stream"
+                )
+            else:
+                if st.session_state.token is None:
+                    try:
+                        app, flow, message = start_device_flow()
+                        st.session_state.auth_app = app
+                        st.session_state.auth_flow = flow
+                        st.session_state.device_flow_message = message
+                        st.session_state.awaiting_auth = True
+                        st.session_state.show_picker = False 
+                    except Exception as e:
+                        st.error(f"Could not start Device Code Flow:\n\n{e}")
+                if st.session_state.awaiting_auth:
+                    st.info("Follow these instructions to authorize Excipher on OneDrive:")
+                    st.code(st.session_state.device_flow_message)
+
+                    result = acquire_token(st.session_state.auth_app, st.session_state.auth_flow)
+                    if "access_token" in result:
+                        st.session_state.token = result["access_token"]
+                        st.session_state.excel_files = list_excel_files(st.session_state.token)
+                        st.session_state.show_picker = True
+                        st.session_state.awaiting_auth = False
+                        upload_to_onedrive(filename, bytes_data.getvalue(), st.session_state.token)
+        st.success("Embeddings saved as " + filename + " to " + destination + "!")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -170,6 +257,7 @@ with col1:
             })
             df_stats["Value"] = df_stats["Value"].astype(str)
             st.table(df_stats)
+            update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Remove Duplicates")
     threshold = st.number_input("Threshold", value=0.99, key="duplicate_threshold")
@@ -177,43 +265,51 @@ with col1:
     if st.button("Run Remove Duplicates"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
                 embedx.remove_duplicates(threshold=threshold, neighbors=neighbors)
-        st.success("Duplicates removed!")
+                st.success("Duplicates removed!")
+                update_session_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Remove Outliers")
     contamination = st.number_input("Contamination", value=0.01, key="outlier_contamination")
     if st.button("Run Remove Outliers"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
                 embedx.remove_outliers(contamination=contamination)
-        st.success("Outliers removed!")
+                st.success("Outliers removed!")
+                update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Center Embeddings")
     if st.button("Center Embeddings"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
                 embedx.center()
-        st.success("Centered!")
+                st.success("Centered!")
+                update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Normalize")
     method = st.selectbox("Method", ["l1", "l2"], key="normalize_method")
     if st.button("Run Normalize"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
                 embedx.normalize(method=method)
-        st.success("Normalized!")
+                st.success("Normalized!")
+                update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Principal Component Analysis (PCA)")
     n_components = st.number_input("Components", value=50, key="pca_components")
@@ -227,96 +323,110 @@ with col1:
             embedx = Embedx(combined_embeddings, verbose=False)
             fig = embedx.whiten(n_components=n_components, whiten=whiten_flag, transform=transform_flag, plot_variance=True)
             st.pyplot(fig)
-        st.success("PCA applied!")
+            st.success("PCA applied!")
+            update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Remove Low Variance")
     var_threshold = st.number_input("Variance Threshold", value=0.001, key="var_threshold")
     if st.button("Run Remove Low Variance"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
                 embedx.remove_low_variance(threshold=var_threshold)
-        st.success("Low variance features removed!")
+                st.success("Low variance features removed!")
+                update_embeddings(embedx, st.session_state.selected_columns)
 
 with col2:
     st.subheader("☆ Visualize ☆")
     st.markdown("---")
     st.markdown("### UMAP")
     dim_umap = st.selectbox("Dimensionality", [2, 3], key="umap_dim")
+    save_plot = st.checkbox("Save plot to file", key="umap_save_plot")
     if st.button("Run UMAP"):
-        if len(st.session_state.selected_columns) is 0:
+        if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        if st.session_state.labels is None:
+            st.error("Select a label column to visualize!")
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            if st.session_state.labels != "None":
+                labels = st.session_state.df[st.session_state.labels].values
+                embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
+            else:
+                embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
-                st.subheader(f"`{col}`")
-                fig = embedx.visualize_umap(dim=dim_umap)
+                fig = embedx.visualize_umap(dim=dim_umap, save_path="outputs/umap_plot.png" if save_plot else None)
                 st.pyplot(fig)
+                update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### t-SNE")
     dim_tsne = st.selectbox("Dimensionality", [2, 3], key="tsne_dim")
+    save_plot = st.checkbox("Save plot to file", key="tsne_save_plot")
     if st.button("Run t-SNE"):
-        if len(st.session_state.selected_columns) is 0:
+        if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        if st.session_state.labels is None:
+            st.error("Select a label column to visualize!")
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            if st.session_state.labels != "None":
+                labels = st.session_state.df[st.session_state.labels].values
+                embedx = Embedx(combined_embeddings, labels=labels, verbose=False)
+            else:
+                embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
-                st.subheader(f"`{col}`")
-                fig = embedx.visualize_tsne(dim=dim_tsne)
+                fig = embedx.visualize_tsne(dim=dim_tsne, save_path="outputs/tsne_plot.png" if save_plot else None)
                 st.pyplot(fig)
+                update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Neighbors")
     n_neighbors = st.number_input("Neighbors", value=10, key="neighbors_count")
     threshold_neighbors = st.number_input("Threshold", value=0.95, key="neighbors_threshold")
+    save_plot = st.checkbox("Save plot to file")
     if st.button("Visualize Neighbors"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
             embedx = Embedx(combined_embeddings, verbose=False)
-            fig = embedx.visualize_neighbors(threshold=threshold_neighbors, n_neighbors=n_neighbors)
+            fig, similarites, num_neighbors_close = embedx.visualize_neighbors(threshold=threshold_neighbors, n_neighbors=n_neighbors, save_path="outputs/neighbors_plot.png" if save_plot else None)
             st.pyplot(fig)
+            st.write(f"Similarities: {similarites}")
+            st.write(f"Number of neighbors close: {num_neighbors_close}")
+            update_embeddings(embedx, st.session_state.selected_columns)
 
     st.markdown("### Norms")
+    save_plot = st.checkbox("Save plot to file", key="save_plot_clusters")
     if st.button("Visualize Norms"):
         if len(st.session_state.selected_columns) == 0:
             st.error("Load an input file, generate embeddings, and select columns first!")
         combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
         if combined_embeddings is not None:
             embedx = Embedx(combined_embeddings, verbose=False)
-            fig = embedx.visualize_norm_histogram()
+            fig = embedx.visualize_norm_histogram(save_path="outputs/norm_histogram_plot.png" if save_plot else None)
             st.pyplot(fig)
-
-    st.markdown("### Clusters")
-    cluster_method = st.selectbox("Cluster Method", ["kmeans", "dbscan", "hdbscan", "gmm", "spectral"], key="cluster_method")
-    viz_method = st.selectbox("Visualization Method", ["umap", "tsne"], key="viz_method")
-    dim_clusters = st.selectbox("Dimensionality", [2, 3])
-    if st.button("Run Clusters Visualization"):
-         if len(st.session_state.selected_columns) is 0:
-            st.error("Load an input file, generate embeddings, and select columns first!")
-         for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
-            if embedx is not None:
-                st.subheader(f"`{col}`")
-                fig = embedx.cluster_and_visualize(method=cluster_method, viz_method=viz_method, dim=dim_clusters)
-                st.pyplot(fig)
+            update_embeddings(embedx, st.session_state.selected_columns)
 
 with col3:
     st.subheader("☆ and Beyond!☆")
     st.markdown("---")
     st.markdown("### Cluster Embeddings")
-    cluster_method = st.selectbox("Method", ["kmeans", "dbscan", "hdbscan", "spectral", "gmm"], key="cluster_method_select")
-    n_clusters = st.number_input("n_clusters", value=10, key="n_clusters")
-    eps = st.number_input("eps", value=0.5, key="eps_value")
-    min_samples = st.number_input("min_samples", value=5, key="min_samples_value")
-    min_cluster_size = st.number_input("min_cluster_size", value=5, key="min_cluster_size_value")
-    n_components_cluster = st.number_input("n_components", value=10, key="n_components_cluster_value")
-
+    cluster_method = st.selectbox("Clustering Method", ["kmeans", "dbscan", "hdbscan", "spectral", "gmm"], key="cluster_method_select")
+    visualization_method = st.selectbox("Visualization Method", ["None", "umap", "tsne"], key="visualization_method")
+    dim_viz_clusters = st.selectbox("Dimensionality", [2, 3], key="dim_viz_clusters")
+    n_clusters = st.number_input("Number of Clusters", value=10, key="n_clusters")
+    eps = st.number_input("Epsilon", value=0.5, key="eps_value")
+    min_samples = st.number_input("Minimum Samples", value=5, key="min_samples_value")
+    min_cluster_size = st.number_input("Minimum Cluster Size", value=5, key="min_cluster_size_value")
+    n_components_cluster = st.number_input("Number of Components", value=10, key="n_components_cluster_value")
+    save_plot = st.checkbox("Save plot to file", key="save_plot_clusters_embeds")
     if st.button("Run Cluster"):
-        for col in st.session_state.selected_columns:
-            embedx = st.session_state.embedxs.get(col)
+        combined_embeddings = get_all_embeddings(st.session_state.selected_columns, st.session_state.embeddings)
+        if combined_embeddings is not None:
+            embedx = Embedx(combined_embeddings, verbose=False)
             if embedx is not None:
                 kwargs = {}
                 if cluster_method == "kmeans":
@@ -331,7 +441,15 @@ with col3:
                 elif cluster_method == "gmm":
                     kwargs["n_components"] = n_components_cluster
                 labels = embedx.cluster_embeddings(method=cluster_method, **kwargs)
+                embedx.set_labels(labels)
+                if visualization_method =="umap":
+                    fig = embedx.visualize_umap(dim=dim_viz_clusters, save_path="cluster_umap_plot.png" if save_plot else None)
+                    st.pyplot(fig)
+                elif visualization_method == "tsne":
+                    fig = embedx.visualize_tsne(dim=dim_viz_clusters, save_path="cluster_tsne_plot.png" if save_plot else None)
+                    st.pyplot(fig)
                 st.write(labels)
+                st.session_state.labels = labels
             else:
                 st.error("Load embeddings first!")
 
