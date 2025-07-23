@@ -127,36 +127,36 @@ class Embedx:
         return self.basic_stats()
     
     def visualize_umap(self, dim=2, save_path=None, display=False):
-        from .visualization import visualize_umap
+        from visualization import visualize_umap
         fig = visualize_umap(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
         if display:
             fig.show()
         return fig
 
     def visualize_tsne(self, dim=2, save_path=None, display=False):
-        from .visualization import visualize_tsne
+        from visualization import visualize_tsne
         fig = visualize_tsne(self.embeddings, self.n_samples, dim=dim, labels=self.labels, save_path=save_path)
         if display:
             fig.show()
         return fig
 
     def visualize_neighbors(self, threshold=0.95, n_neighbors=10, save_path=None, display=False):
-        from .visualization import visualize_neighbors
+        from visualization import visualize_neighbors
         fig, similarity, neighbors = visualize_neighbors(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, save_path=save_path)
         if display:
             fig.show()
         return fig, similarity, neighbors
 
     def visualize_norm_histogram(self, save_path=None, display=False):
-        from .visualization import visualize_norms
+        from visualization import visualize_norms
         fig = visualize_norms(self.embeddings, save_path=save_path)
         if display:
             fig.show()
         return fig
 
     def cluster_visualize(self, cluster_method="kmeans", viz_method="umap", dim=2, save_path=None, display=False, **kwargs):
-        from .cluster import cluster_embeddings
-        from .visualization import visualize_clusters
+        from cluster import cluster_embeddings
+        from visualization import visualize_clusters
         if "method" in kwargs:
             labels = cluster_embeddings(self.embeddings, verbose=self.verbose, **kwargs)
         else:
@@ -232,46 +232,46 @@ class Embedx:
             print(f"Saved embeddings to {path} as .{format}")
 
     def cluster_embeddings(self, method="kmeans", **kwargs):
-        from .cluster import cluster_embeddings
+        from cluster import cluster_embeddings
         return cluster_embeddings(self.embeddings, method=method, verbose = self.verbose, **kwargs)
     
     def intracluster_variance(self, plot=True, save_path=None, display=False):
-        from .advanced import intracluster_variance
+        from advanced import intracluster_variance
         fig, variance = intracluster_variance(self.embeddings, self.labels, plot=plot, save_path=save_path)
         if display:
             fig.show()
         return fig, variance
     
     def intercluster_distance(self, plot=True, save_path=None, display=False):
-        from .advanced import intercluster_distance
+        from advanced import intercluster_distance
         fig, distance = intercluster_distance(self.embeddings, self.labels, plot=plot, save_path=save_path)
         if display:
             fig.show()
         return fig, distance
     
     def compare_models(self, embeddings_2, plot=True, save_path = None, display=False):
-        from .advanced import compare_models
+        from advanced import compare_models
         fig, similarity = compare_models(self.embeddings, embeddings_2, plot=plot, save_path=save_path)
         if display:
             fig.show()
         return fig, similarity
     
     def semantic_coverage(self, plot=True, save_path=None, display=False):
-        from .advanced import semantic_coverage
+        from advanced import semantic_coverage
         fig, cov = semantic_coverage(self.embeddings, self.labels, plot=plot, save_path=save_path)     
         if display:
             fig.show()
         return fig, cov  
     
     def density(self, threshold, n_neighbors, plot=True, save_path=None, display=False):
-        from .advanced import density
+        from advanced import density
         fig, similarity, dens = density(self.embeddings, threshold=threshold, n_neighbors=n_neighbors, plot=plot, save_path=save_path)
         if display:
             fig.show()
         return fig, similarity, dens
     
     def decay_over_time(self, window_size=10, plot=True, save_path=None, display=False):
-        from .advanced import decay_over_time
+        from advanced import decay_over_time
         fig, decay, time = decay_over_time(self.timestamps, self.embeddings, window_size=window_size, plot=True, save_path=save_path)
         if display:
             fig.show()
