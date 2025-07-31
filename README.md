@@ -2,6 +2,10 @@
 
 An all-in-one embeddings package in Python for data preprocessing: cleaning, visualization, clustering, etc. CLI support and an LLM-powered web app to recommend data preprocessing steps customized to the user's dataset and model requirements/goals. 
 
+## Tech Stack
+Python, Streamlit, Groq, OneDrive
+FAISS, sklearn, sentence-transformers
+
 ## Project Links
 https://embedvisor.streamlit.app
 
