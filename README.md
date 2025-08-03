@@ -74,7 +74,7 @@ https://github.com/anvithasm/embedvisor
 - `cluster_visualize(cluster_method="kmeans", viz_method="umap", dim=2, save_path=None, display=False, **kwargs)`
   - Cluster embeddings using specified method and visualize clusters.
 
-## Advanced Analytics
+#### Advanced Analytics
 - `intracluster_variance(plot=True, save_path=None, display=False)`
   - Calculate and plot variance within clusters.
 - `intercluster_distance(plot=True, save_path=None, display=False)`
